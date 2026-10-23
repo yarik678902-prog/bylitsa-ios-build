@@ -15,8 +15,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --location --retry 3 --output source.zip https://bylitsa.193-108-115-19.sslip.io/downloads/Bylitsa-3.0.1-Source.zip
-          echo '71162fece7b59167607c0922745e370c8bf1ca8819af0f274290c4bd2fb46add  source.zip' | shasum -a 256 -c -
+          curl --fail --location --retry 3 --output source.zip https://bylitsa.193-108-115-19.sslip.io/downloads/Bylitsa-3.0.2-Source.zip
+          echo '9774106baa50968540f79ac7eb1f2993f6896e4d0cd9be558b1dd88ceac563ae  source.zip' | shasum -a 256 -c -
           unzip -q source.zip -d source
           xcodebuild -version
       - name: Install Flutter
@@ -35,6 +35,7 @@ jobs:
           flutter clean
           find ios -name Package.resolved -delete
           flutter pub get
+          flutter test test/utils/ios_database_key_test.dart
           flutter build ios --release --no-codesign
       - name: Verify and package IPA
         shell: bash
@@ -59,14 +60,26 @@ jobs:
           subprocess.run(['ditto', str(app), 'stage/Payload/Bylitsa.app'], check=True)
           PY
           mkdir -p artifacts
-          ditto -c -k --keepParent stage/Payload artifacts/Bylitsa-3.0.1-iOS-unsigned.ipa
-          unzip -tq artifacts/Bylitsa-3.0.1-iOS-unsigned.ipa
+          ditto -c -k --keepParent stage/Payload artifacts/Bylitsa-3.0.2-iOS-unsigned.ipa
+          unzip -tq artifacts/Bylitsa-3.0.2-iOS-unsigned.ipa
           shasum -a 256 artifacts/*.ipa | tee artifacts/SHA256SUMS.txt
           echo 'Unsigned device build. Sign the app, extensions and frameworks before installation.' > artifacts/README.txt
+      - name: Verify first launch on iPhone simulator
+        working-directory: source/Bylitsa-Matrix/app
+        shell: bash
+        env:
+          FLUTTER_XCODE_CODE_SIGNING_ALLOWED: 'NO'
+        run: |
+          set -euo pipefail
+          SIM=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for devices in d["devices"].values() for x in devices if x["name"].startswith("iPhone")))')
+          xcrun simctl boot "$SIM" || true
+          xcrun simctl bootstatus "$SIM" -b
+          flutter test integration_test/ios_startup_test.dart -d "$SIM" --timeout 5m
+          xcrun simctl io "$SIM" screenshot ../../../artifacts/ios-startup.png
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: Bylitsa-3.0.1-iOS-unsigned
+          name: Bylitsa-3.0.2-iOS-unsigned
           path: artifacts/*
           if-no-files-found: error
           retention-days: 7

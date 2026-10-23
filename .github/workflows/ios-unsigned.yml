@@ -32,6 +32,8 @@ jobs:
           set -euo pipefail
           flutter --version
           flutter config --enable-swift-package-manager
+          flutter clean
+          find ios -name Package.resolved -delete
           flutter pub get
           flutter build ios --release --no-codesign
       - name: Verify and package IPA
